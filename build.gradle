@@ -1,6 +1,19 @@
 plugins { id 'java' }
 group = 'com.example'
 version = '1.0'
-repositories { mavenCentral(); maven { url = 'https://repo.papermc.io/repository/maven-public/' } }
-dependencies { compileOnly 'io.papermc.paper:paper-api:26.2.build.134-stable' }
+repositories {
+    mavenCentral()
+    maven { url = 'https://repo.papermc.io/repository/maven-public/' }
+    maven { url = 'https://maven.enginehub.org/repo/' }
+}
+dependencies {
+    compileOnly 'io.papermc.paper:paper-api:26.2.build.134-stable'
+    compileOnly 'com.sk89q.worldguard:worldguard-bukkit:7.0.19'
+
+    testImplementation 'io.papermc.paper:paper-api:26.2.build.134-stable'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.13.4'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.13.4'
+}
 java { toolchain { languageVersion = JavaLanguageVersion.of(25) } }
+
+test { useJUnitPlatform() }

@@ -1,0 +1,18 @@
+# Crops supported by WaterReplant. Nether wart uses soul sand; the other crops use farmland.
+crops:
+  - WHEAT
+  - CARROTS
+  - POTATOES
+  - BEETROOTS
+  - NETHER_WART
+
+# Replanting consumes one seed/item from the crop's vanilla water-break drops.
+# If the crop drops no seed, it will not be replanted.
+survival-replant-cost: true
+
+# Do not replant inside WorldGuard regions where the BUILD flag denies building.
+# This setting is ignored when WorldGuard is not installed.
+worldguard-protection: true
+
+# How often, in ticks, to check whether harvested crop spots are dry again.
+check-interval-ticks: 5
