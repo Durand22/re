@@ -47,6 +47,16 @@ class CropTypeTest {
     @Test
     void configNamesAreCaseInsensitiveAndRejectUnsupportedCrops() {
         assertEquals(CropType.NETHER_WART, CropType.fromConfigName("nether_wart"));
-        assertNull(CropType.fromConfigName("PUMPKIN"));
+        assertEquals(CropType.PUMPKIN, CropType.fromConfigName("PUMPKIN"));
+        assertEquals(CropType.SWEET_BERRY_BUSH, CropType.fromConfigName("sweet_berry_bush"));
+        assertEquals(CropType.TORCHFLOWER_CROP, CropType.fromConfigName("torchflower_crop"));
+    }
+
+    @Test
+    void fruitAndRegrowingPlantsDoNotGetReplantedAsAgeZeroCrops() {
+        assertEquals(false, CropType.PUMPKIN.replantsAfterHarvest());
+        assertEquals(false, CropType.SUGAR_CANE.replantsAfterHarvest());
+        assertEquals(true, CropType.SUGAR_CANE.regrowsFromBase());
+        assertEquals(true, CropType.SWEET_BERRY_BUSH.replantsAfterHarvest());
     }
 }

@@ -6,11 +6,14 @@ import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.data.Ageable;
 import org.bukkit.block.data.BlockData;
+import org.bukkit.Sound;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockFromToEvent;
+import org.bukkit.event.block.BlockDispenseEvent;
+import org.bukkit.event.block.BlockShearEntityEvent;
 import io.papermc.paper.event.block.BlockBreakBlockEvent;
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -19,12 +22,11 @@ import org.bukkit.inventory.ItemStack;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.EnumSet;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 /** Replants selected mature crops after water washes them away. */
@@ -36,15 +38,22 @@ public final class WaterReplant extends JavaPlugin implements Listener {
 
     private final Map<PendingKey, PendingCrop> pending = new HashMap<>();
     private File pendingFile;
-    private Set<CropType> enabledCrops = EnumSet.noneOf(CropType.class);
+    private final Map<CropType, CropSettings> cropSettings = new EnumMap<>(CropType.class);
     private ReplantProtection protection = block -> true;
-    private boolean survivalCost;
+    private boolean feedbackSounds;
+    private int maxPendingCrops;
+    private boolean dispenserPickaxes;
+    private boolean dispenserTreeFelling;
+    private boolean dispenserMobAttacks;
+    private boolean dispenserShears;
+    private boolean dispenserTreeReplant;
     private boolean pendingDirty;
 
     @Override
     public void onEnable() {
         pendingFile = new File(getDataFolder(), "pending.yml");
         saveDefaultConfig();
+        migrateConfig();
         reloadSettings();
         loadPending();
 
@@ -58,7 +67,7 @@ public final class WaterReplant extends JavaPlugin implements Listener {
         long interval = Math.max(1L, getConfig().getLong("check-interval-ticks", DEFAULT_CHECK_INTERVAL_TICKS));
         getServer().getScheduler().runTaskTimer(this, this::checkPending, interval, interval);
         getServer().getScheduler().runTaskTimer(this, this::savePendingIfDirty, SAVE_INTERVAL_TICKS, SAVE_INTERVAL_TICKS);
-        getLogger().info("WaterReplant loaded with crops: " + enabledCrops);
+        getLogger().info("WaterReplant loaded with crops: " + cropSettings);
     }
 
     @Override
@@ -67,19 +76,55 @@ public final class WaterReplant extends JavaPlugin implements Listener {
     }
 
     private void reloadSettings() {
-        enabledCrops = EnumSet.noneOf(CropType.class);
-        for (String configured : getConfig().getStringList("crops")) {
-            CropType type = CropType.fromConfigName(configured);
-            if (type == null) {
-                getLogger().warning("Ignoring unsupported crop in config.yml: " + configured);
+        cropSettings.clear();
+        boolean legacyCost = getConfig().getBoolean("survival-replant-cost", true);
+        for (CropType type : CropType.values()) {
+            String path = "crops." + type.name();
+            if (getConfig().isList("crops")) {
+                boolean listed = getConfig().getStringList("crops").stream()
+                        .anyMatch(name -> type.name().equalsIgnoreCase(name));
+                boolean enabled = listed || type.addedWithExpandedFarmSupport();
+                cropSettings.put(type, new CropSettings(enabled, legacyCost));
             } else {
-                enabledCrops.add(type);
+                boolean enabled = getConfig().getBoolean(path + ".enabled", true);
+                boolean cost = getConfig().getBoolean(path + ".survival-cost", legacyCost);
+                cropSettings.put(type, new CropSettings(enabled, cost));
             }
         }
-        survivalCost = getConfig().getBoolean("survival-replant-cost", true);
+        feedbackSounds = getConfig().getBoolean("feedback-sounds", true);
+        maxPendingCrops = Math.max(0, getConfig().getInt("max-pending-crops", 0));
+        dispenserPickaxes = getConfig().getBoolean("dispenser-tools.pickaxe-breaking", true);
+        dispenserTreeFelling = getConfig().getBoolean("dispenser-tools.axe-tree-felling", true);
+        dispenserMobAttacks = getConfig().getBoolean("dispenser-tools.sword-mob-attacks", true);
+        dispenserShears = getConfig().getBoolean("dispenser-tools.shears", true);
+        dispenserTreeReplant = getConfig().getBoolean("dispenser-tools.tree-replant", true);
     }
 
-    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    private void migrateConfig() {
+        int configVersion = getConfig().getInt("config-version", 0);
+        if (configVersion >= 2) return;
+        int oldCap = getConfig().getInt("max-pending-crops", 0);
+        if (oldCap == 0 || oldCap == 256) {
+            getConfig().set("max-pending-crops", 0);
+        }
+        getConfig().set("config-version", 2);
+        saveConfig();
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onDispenserToolUse(BlockDispenseEvent event) {
+        DispenserTools.handle(event, protection, dispenserPickaxes, dispenserTreeFelling,
+                dispenserMobAttacks, dispenserTreeReplant);
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onDispenserShear(BlockShearEntityEvent event) {
+        if (!dispenserShears || !protection.mayReplant(event.getBlock())) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onBlockFromTo(BlockFromToEvent event) {
         if (event.getBlock().getType() != Material.WATER) {
             return;
@@ -87,18 +132,41 @@ public final class WaterReplant extends JavaPlugin implements Listener {
 
         Block target = event.getToBlock();
         CropType crop = CropType.forCrop(target.getType());
-        if (crop == null || !enabledCrops.contains(crop)) {
+        CropSettings settings = crop == null ? null : cropSettings.get(crop);
+        if (settings == null || !settings.enabled()) {
             return;
         }
 
-        if (!(target.getBlockData() instanceof Ageable ageable)
-                || ageable.getAge() < ageable.getMaximumAge()) {
+        if (crop == CropType.PUMPKIN || crop == CropType.MELON) {
+            if (protection.mayReplant(target)) {
+                target.breakNaturally(true);
+            } else {
+                event.setCancelled(true);
+            }
             return;
+        }
+
+        if (crop.regrowsFromBase()) {
+            if (target.getRelative(BlockFace.DOWN).getType() != crop.crop()) {
+                event.setCancelled(true);
+                return;
+            }
+        } else if (crop.needsAgeToHarvest()) {
+            if (!(target.getBlockData() instanceof Ageable ageable)) return;
+            if (!CropType.isMature(ageable.getAge(), ageable.getMaximumAge())) {
+                event.setCancelled(true);
+                return;
+            }
         }
 
         PendingKey key = PendingKey.of(target);
         if (!pending.containsKey(key)) {
-            pending.put(key, new PendingCrop(crop, !survivalCost));
+            if (maxPendingCrops > 0 && pending.size() >= maxPendingCrops) {
+                event.setCancelled(true);
+                return;
+            }
+            boolean costsItem = crop.replantsAfterHarvest() && settings.survivalCost();
+            pending.put(key, new PendingCrop(crop, !costsItem));
             pendingDirty = true;
         }
     }
@@ -108,7 +176,14 @@ public final class WaterReplant extends JavaPlugin implements Listener {
     public void onBlockBreakByLiquid(BlockBreakBlockEvent event) {
         PendingKey key = PendingKey.of(event.getBlock());
         PendingCrop pendingCrop = pending.get(key);
-        if (pendingCrop == null || pendingCrop.seedPaid()) {
+        if (pendingCrop == null) {
+            return;
+        }
+
+        if (feedbackSounds) {
+            event.getBlock().getWorld().playSound(event.getBlock().getLocation(), Sound.BLOCK_CROP_BREAK, 0.35f, 1.0f);
+        }
+        if (pendingCrop.seedPaid()) {
             return;
         }
 
@@ -152,14 +227,17 @@ public final class WaterReplant extends JavaPlugin implements Listener {
             }
 
             PendingCrop crop = entry.getValue();
-            boolean correctSoil = block.getRelative(BlockFace.DOWN).getType() == crop.type().soil();
+            boolean correctSoil = crop.type().hasCorrectSoil(block.getRelative(BlockFace.DOWN).getType());
             boolean eligible = ReplantRules.mayReplant(current.isAir(), current == Material.WATER,
                     crop.seedPaid(), correctSoil);
-            if (eligible && protection.mayReplant(block)) {
+            if (eligible && crop.type().replantsAfterHarvest() && protection.mayReplant(block)) {
                 BlockData fresh = crop.type().crop().createBlockData();
                 if (fresh instanceof Ageable ageable) {
                     ageable.setAge(0);
                     block.setBlockData(fresh);
+                    if (feedbackSounds) {
+                        world.playSound(block.getLocation(), Sound.ITEM_CROP_PLANT, 0.35f, 1.0f);
+                    }
                 }
             }
 
@@ -183,6 +261,7 @@ public final class WaterReplant extends JavaPlugin implements Listener {
                 CropType crop = CropType.fromConfigName(String.valueOf(row.get("crop")));
                 boolean seedPaid = Boolean.parseBoolean(String.valueOf(row.get("seed-paid")));
                 if (crop != null) {
+                    boolean survivalCost = cropSettings.getOrDefault(crop, new CropSettings(false, true)).survivalCost();
                     pending.put(new PendingKey(worldId, x, y, z), new PendingCrop(crop, seedPaid || !survivalCost));
                 }
             } catch (IllegalArgumentException exception) {
@@ -231,4 +310,6 @@ public final class WaterReplant extends JavaPlugin implements Listener {
     }
 
     private record PendingCrop(CropType type, boolean seedPaid) {}
+
+    private record CropSettings(boolean enabled, boolean survivalCost) {}
 }

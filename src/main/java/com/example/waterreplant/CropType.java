@@ -10,7 +10,16 @@ enum CropType {
     CARROTS("CARROTS", "CARROT", "FARMLAND"),
     POTATOES("POTATOES", "POTATO", "FARMLAND"),
     BEETROOTS("BEETROOTS", "BEETROOT_SEEDS", "FARMLAND"),
-    NETHER_WART("NETHER_WART", "NETHER_WART", "SOUL_SAND");
+    NETHER_WART("NETHER_WART", "NETHER_WART", "SOUL_SAND"),
+    PUMPKIN("PUMPKIN", "PUMPKIN_SEEDS", "FARMLAND"),
+    MELON("MELON", "MELON_SEEDS", "FARMLAND"),
+    SWEET_BERRY_BUSH("SWEET_BERRY_BUSH", "SWEET_BERRIES", "BERRY_SOIL"),
+    SUGAR_CANE("SUGAR_CANE", "SUGAR_CANE", "SAND"),
+    CACTUS("CACTUS", "CACTUS", "SAND"),
+    BAMBOO("BAMBOO", "BAMBOO", "DIRT"),
+    KELP("KELP", "KELP", "WATER"),
+    TORCHFLOWER_CROP("TORCHFLOWER_CROP", "TORCHFLOWER_SEEDS", "FARMLAND"),
+    PITCHER_CROP("PITCHER_CROP", "PITCHER_POD", "FARMLAND");
 
     private final String cropMaterial;
     private final String seedMaterial;
@@ -40,6 +49,52 @@ enum CropType {
 
     static CropType forCrop(Material material) {
         return fromConfigName(material.name());
+    }
+
+    static boolean isMature(int age, int maximumAge) {
+        return age >= maximumAge;
+    }
+
+    boolean needsAgeToHarvest() {
+        return switch (this) {
+            case WHEAT, CARROTS, POTATOES, BEETROOTS, NETHER_WART, SWEET_BERRY_BUSH,
+                    TORCHFLOWER_CROP, PITCHER_CROP -> true;
+            default -> false;
+        };
+    }
+
+    boolean replantsAfterHarvest() {
+        return switch (this) {
+            case WHEAT, CARROTS, POTATOES, BEETROOTS, NETHER_WART, SWEET_BERRY_BUSH,
+                    TORCHFLOWER_CROP, PITCHER_CROP -> true;
+            default -> false;
+        };
+    }
+
+    boolean regrowsFromBase() {
+        return switch (this) {
+            case SUGAR_CANE, CACTUS, BAMBOO, KELP -> true;
+            default -> false;
+        };
+    }
+
+    boolean addedWithExpandedFarmSupport() {
+        return switch (this) {
+            case PUMPKIN, MELON, SWEET_BERRY_BUSH, SUGAR_CANE, CACTUS, BAMBOO, KELP,
+                    TORCHFLOWER_CROP, PITCHER_CROP -> true;
+            default -> false;
+        };
+    }
+
+    boolean hasCorrectSoil(Material material) {
+        if ("BERRY_SOIL".equals(soilMaterial)) {
+            return switch (material) {
+                case DIRT, GRASS_BLOCK, PODZOL, COARSE_DIRT, ROOTED_DIRT, MOSS_BLOCK, MYCELIUM -> true;
+                default -> false;
+            };
+        }
+        return "WATER".equals(soilMaterial) ? material == Material.WATER
+                : material == soil();
     }
 
     static CropType fromConfigName(String name) {

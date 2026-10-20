@@ -1,18 +1,42 @@
-# Crops supported by WaterReplant. Nether wart uses soul sand; the other crops use farmland.
+# Per-crop controls. Soil requirements vary by crop; regrowing plants keep their base.
+config-version: 2
 crops:
-  - WHEAT
-  - CARROTS
-  - POTATOES
-  - BEETROOTS
-  - NETHER_WART
+  WHEAT: { enabled: true, survival-cost: true }
+  CARROTS: { enabled: true, survival-cost: true }
+  POTATOES: { enabled: true, survival-cost: true }
+  BEETROOTS: { enabled: true, survival-cost: true }
+  NETHER_WART: { enabled: true, survival-cost: true }
+  PUMPKIN: { enabled: true, survival-cost: false }
+  MELON: { enabled: true, survival-cost: false }
+  SWEET_BERRY_BUSH: { enabled: true, survival-cost: true }
+  SUGAR_CANE: { enabled: true, survival-cost: false }
+  CACTUS: { enabled: true, survival-cost: false }
+  BAMBOO: { enabled: true, survival-cost: false }
+  KELP: { enabled: true, survival-cost: false }
+  TORCHFLOWER_CROP: { enabled: true, survival-cost: true }
+  PITCHER_CROP: { enabled: true, survival-cost: true }
 
-# Replanting consumes one seed/item from the crop's vanilla water-break drops.
-# If the crop drops no seed, it will not be replanted.
+# Used for legacy configurations where `crops` was a list.
 survival-replant-cost: true
 
-# Do not replant inside WorldGuard regions where the BUILD flag denies building.
-# This setting is ignored when WorldGuard is not installed.
+# Respect WorldGuard BUILD denial when deciding whether to replant.
 worldguard-protection: true
 
-# How often, in ticks, to check whether harvested crop spots are dry again.
+# Polling interval for waiting crop spots.
 check-interval-ticks: 5
+
+# Play a sound at the crop spot when harvested and replanted.
+feedback-sounds: true
+
+# Pending crop spot cap. Zero disables the cap; a positive value stops further
+# water flow into enabled crops when the pending queue reaches the limit.
+max-pending-crops: 0
+
+# Tool automation only runs when the dispenser receives a redstone pulse.
+# Tool durability is consumed; tree felling is capped at 64 logs per pulse.
+dispenser-tools:
+  shears: true
+  pickaxe-breaking: true
+  axe-tree-felling: true
+  sword-mob-attacks: true
+  tree-replant: true

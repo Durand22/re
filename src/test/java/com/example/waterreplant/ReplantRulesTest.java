@@ -7,6 +7,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ReplantRulesTest {
     @Test
+    void distinguishesImmatureAndMatureCropAges() {
+        assertFalse(CropType.isMature(6, 7));
+        assertTrue(CropType.isMature(7, 7));
+    }
+
+    @Test
     void replantsOnlyWhenTheSpotIsClearPaidAndHasCorrectSoil() {
         assertTrue(ReplantRules.mayReplant(true, false, true, true));
     }
