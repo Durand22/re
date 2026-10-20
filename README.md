@@ -1,4 +1,4 @@
-# WaterReplant 2.0
+# WaterReplant 3.0
 
 WaterReplant is a Paper 26.2 survival farming plugin. Water can harvest configured mature crops; immature age-based crops are protected from flowing water. Replantable crops return after the water clears when the correct soil remains and the seed/item cost is paid.
 
@@ -24,7 +24,7 @@ Successful mining, felling, and attacks consume tool durability. Drops spawn nor
 
 ## Install and test
 
-1. Copy `build/libs/re-2.0.jar` into the Paper server's `plugins` folder.
+1. Copy `build/libs/re-3.0.jar` into the Paper server's `plugins` folder.
 2. Start the server and confirm WaterReplant appears in `/plugins`.
 3. In a test world, pulse dispensers facing a log, mineable block, hostile mob, or sheep. Put the required tool (and a sapling if you want tree replanting) in the dispenser.
 4. Test water harvesting on a mature crop row and check that immature crops stay intact.
